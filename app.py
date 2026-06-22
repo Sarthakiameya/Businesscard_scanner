@@ -4,20 +4,25 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import cv2
 import numpy as np
+import uvicorn
+from fastapi import FastAPI, File, UploadFile, Body
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
 from openai import OpenAI
 
-
-load_dotenv()
-app = Flask(__name__)
+# ═══════════════════════════════════════════════════════════════════════════════
+# SETUP
+# ═══════════════════════════════════════════════════════════════════════════════
 
 BASE_DIR            = Path(__file__).resolve().parent
 KNOWLEDGE_BASE_FILE = BASE_DIR / "knowledgebase.json"
+
+load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL   = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
@@ -26,6 +31,9 @@ if not OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY in .env file.")
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+app = FastAPI(title="Business Card Scanner", version="2.0.0")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 TARGET_FIELDS = ["name", "number", "email", "address", "website", "company_name", "designation"]
 
@@ -177,12 +185,11 @@ name, number, email, address, website, company_name, designation
 
 FIELD RULES
 name (REQUIRED)
-  Full person name or partial name (first name only, surname only, or first+surname).
-  Never include titles or designations.
+  Full person name or partial name (first name only, surname only, or first+surname). There can be cases when first name is only present like arun or mamta, remember the name is not supposed to be first name + surname/second name
+  Never include titles or designations. there can be cases when company name is ahead human name. 
   Reassemble visually split names: "JO HN SM ITH" -> "JOHN SMITH"
   Name is typically in large text regions, often at the top of card
   Common Indian names: Amit, Suresh, Priya, Rahul, Anjali, Vikram, Sneha, Ravi, Neha, Sunil
-  Handle stylized spacing and unusual positioning
   If card shows "Company Name | Person Name" or "Company Name - Person Name", extract the person's name part
   Extract even single names or partial names (e.g., "firstname" from "company name | firstname")
   Exclude: company names (unless preceded by separator like | or -), job titles, descriptive text
@@ -244,12 +251,10 @@ def get_structured_data(image: np.ndarray) -> Dict[str, Any]:
     """
     img_b64 = image_to_base64_jpeg(image, quality=88)
 
-    user_text = _OPENAI_PROMPT
-
     response = openai_client.chat.completions.create(
         model=OPENAI_MODEL,
         temperature=0.0,
-        max_tokens=1024,
+        max_completion_tokens=2048,
         messages=[
             {"role": "system", "content": _OPENAI_SYSTEM},
             {
@@ -261,7 +266,7 @@ def get_structured_data(image: np.ndarray) -> Dict[str, Any]:
                             "url": f"data:image/jpeg;base64,{img_b64}",
                         },
                     },
-                    {"type": "text", "text": user_text},
+                    {"type": "text", "text": _OPENAI_PROMPT},
                 ],
             },
         ],
@@ -295,49 +300,49 @@ def append_to_knowledge_base(entry: Dict[str, Any]) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FLASK ROUTES
+# FASTAPI ROUTES
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    return FileResponse(str(BASE_DIR / "templates" / "index.html"))
 
 
 @app.post("/scan")
-def scan_card():
-    image_file = request.files.get("image")
-    if not image_file:
-        return jsonify({"error": "No image uploaded."}), 400
-
+async def scan_card(image: UploadFile = File(...)):
+    """Upload a business card image and extract structured contact information."""
     try:
-        raw_bytes = image_file.read()
+        raw_bytes = await image.read()
 
         # 1. Load & normalise resolution
-        image = decode_image(raw_bytes)
+        img = decode_image(raw_bytes)
 
         # 2. Send to OpenAI vision for extraction
-        structured = get_structured_data(image)
+        structured = get_structured_data(img)
 
     except json.JSONDecodeError as exc:
-        return jsonify({"error": f"OpenAI returned invalid JSON: {exc}"}), 500
+        return JSONResponse(status_code=500, content={"error": f"OpenAI returned invalid JSON: {exc}"})
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        return JSONResponse(status_code=500, content={"error": str(exc)})
 
-    return jsonify({"raw_text": "", "data": structured})
+    return {"raw_text": "", "data": structured}
 
 
 @app.post("/confirm")
-def confirm_data():
-    payload   = request.get_json(silent=True) or {}
+async def confirm_data(payload: Dict[str, Any] = Body(...)):
+    """Confirm and save extracted card data to the knowledge base."""
     confirmed = normalize_response(payload.get("data", {}))
     append_to_knowledge_base(confirmed)
-    return jsonify({"message": "Saved to knowledge base.", "data": confirmed})
+    return {"message": "Saved to knowledge base.", "data": confirmed}
 
 
 @app.get("/health")
 def health():
-    return jsonify({"status": "ok"})
+    """Health check endpoint."""
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=True)
