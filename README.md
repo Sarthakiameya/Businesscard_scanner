@@ -1,10 +1,10 @@
 # Business Card OCR Scanner
 
-A sophisticated web-based business card scanner that uses AI to extract contact information from business card images. This application combines OpenCV for basic image loading/normalization with OpenAI's GPT-4.1-mini vision model for intelligent text extraction, featuring specialized prompt engineering for high-precision Indian name detection.
+A sophisticated web-based business card scanner that uses AI to extract contact information from business card images. This application combines OpenCV for basic image loading/normalization with OpenAI's GPT-5.4-mini vision model for intelligent text extraction, featuring specialized prompt engineering for high-precision Indian name detection.
 
 ## Features
 
-- **AI-Powered OCR**: Utilizes OpenAI's gpt-4.1-mini model for vision-based text extraction.
+- **AI-Powered OCR**: Utilizes OpenAI's gpt-5.4-mini model for vision-based text extraction.
 - **Indian Name Detection**: Specialized prompts and techniques for identifying Indian names regardless of font styling.
 - **Image Enhancement Primitives**: Built-in OpenCV utilities (CLAHE, deskewing, unsharp mask, Richardson-Lucy deconvolution, bilateral filter, gamma correction) available for advanced processing.
 - **Web Interface**: Clean, responsive web UI for easy business card scanning.
@@ -72,7 +72,7 @@ pip install -r requirements.txt
 Create a `.env` file in the project root:
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-5.4-mini
 ```
 
 ## How to Use
@@ -115,7 +115,7 @@ The application implements a clean, efficient pipeline:
    - Optimizes resolution: Minimum 900px and Maximum 2400px using Lanczos and Area interpolation to balance detail versus payload size for the OpenAI Vision API.
 2. **OpenAI Vision API Call**
    - Encodes the normalized image as a base64 JPEG (88% quality).
-   - Sends the image directly to the GPT-4.1-mini vision model with deterministic parameters (`temperature=0`).
+   - Sends the image directly to the GPT-5.4-mini vision model with deterministic parameters (`temperature=0`).
 
 ### Image Enhancement Primitives (Utility Library)
 The code retains 6 modular image enhancement functions for potential pre-processing pipelines or custom utilities:
@@ -128,7 +128,7 @@ The code retains 6 modular image enhancement functions for potential pre-process
 
 ### OCR and Text Extraction
 1. **OpenAI Vision Integration**
-   - Sends normalized images to OpenAI's gpt-4.1-mini model.
+   - Sends normalized images to OpenAI's gpt-5.4-mini model.
    - Temperature set to 0.0 for consistent results.
 2. **Indian Name Detection**
    - Specialized prompts for Indian name recognition.
@@ -148,17 +148,17 @@ The code retains 6 modular image enhancement functions for potential pre-process
 
 ### Environment Variables
 - `OPENAI_API_KEY`: Your OpenAI API key (required)
-- `OPENAI_MODEL`: OpenAI model to use (default: gpt-4.1-mini)
+- `OPENAI_MODEL`: OpenAI model to use (default: gpt-5.4-mini)
 
 ### Image Processing Parameters
 - Minimum image dimension: 900px
 - Maximum image dimension: 2400px
 
 ### API Settings
-- OpenAI model: gpt-4.1-mini (configurable via `OPENAI_MODEL`)
+- OpenAI model: gpt-5.4-mini (configurable via `OPENAI_MODEL`)
 - Request timeout: 60 seconds (SDK default)
 - Temperature: 0.0 (for deterministic outputs)
-- Max tokens: 1024
+- Max tokens: 2048
 
 ---
 
